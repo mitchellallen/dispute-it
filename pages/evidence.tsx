@@ -30,23 +30,26 @@ const EvidenceBuilderView: React.FC = () => {
 
   // --- 2. The Updated "Iron Man" Logic ---
   useEffect(() => {
-    // FIX: Check for both property object OR the direct address in the URL
-    const displayAddress = property?.address || (router.query.address as string);
-    const displayLocation = property?.city || region.city;
-
-    if (displayAddress && router.isReady) {
+    // 1. Wait for the router to be fully loaded
+    if (!router.isReady) return;
+  
+    // 2. Extract location data from URL or property object
+    const currentAddress = (router.query.address as string) || property?.address;
+    const currentCity = (router.query.city as string) || property?.city || 'Dallas';
+    const currentState = (router.query.state as string) || property?.state || 'TX';
+  
+    if (currentAddress) {
       setIsLoadingTrends(true);
-      
-      // Pass the address and location context to Gemini
-      getNeighborhoodTrends(displayAddress, displayLocation)
+      console.log("Fetching trends for:", currentAddress, currentCity);
+  
+      getNeighborhoodTrends(currentAddress, `${currentCity}, ${currentState}`)
         .then((data) => {
           setTrends(data);
         })
-        .catch((err) => {
-          console.error("AI Trends fetch failed:", err);
-        })
+        .catch((err) => console.error("Gemini Error:", err))
         .finally(() => setIsLoadingTrends(false));
     }
+  // 3. WATCH THE WHOLE QUERY: This is the fix for manual URL changes
   }, [router.isReady, router.query]);
 
   // --- 3. Actions & Handlers ---
