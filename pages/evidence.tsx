@@ -9,31 +9,47 @@ import { getNeighborhoodTrends, analyzeDocument } from '../lib/geminiService';
 import { EvidenceItem, Trend, Property } from '../lib/types';
 import Image from 'next/image';
 
-// Moved outside the component to be a pure function
 const generateUniqueId = () => `_${Math.random().toString(36).substr(2, 9)}`;
 
 const EvidenceBuilderView: React.FC = () => {
   const router = useRouter();
 
-  const property: Property | null = router.query.property ? JSON.parse(router.query.property as string) : null;
-  const region = { city: 'Dallas', state: 'TX' };
-
+  // --- 1. State Management ---
   const [items, setItems] = useState<EvidenceItem[]>([]);
   const [trends, setTrends] = useState<Trend[]>([]);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isLoadingTrends, setIsLoadingTrends] = useState(true);
   const [globalScanning, setGlobalScanning] = useState(false);
+  
+  // Initialize property from query if available
+  const property: Property | null = router.query.property ? JSON.parse(router.query.property as string) : null;
   const [requestedValue, setRequestedValue] = useState(property ? property.assessedValue * 0.85 : 0);
+  
   const estimatedSavings = property ? Math.max(0, (property.assessedValue - requestedValue) * 0.025) : 0;
+  const region = { city: 'Dallas', state: 'TX' };
 
+  // --- 2. The Updated "Iron Man" Logic ---
   useEffect(() => {
-    if (property) {
-      getNeighborhoodTrends(property.address, property.county || region.city)
-        .then(setTrends)
+    // FIX: Check for both property object OR the direct address in the URL
+    const displayAddress = property?.address || (router.query.address as string);
+    const displayLocation = property?.city || region.city;
+
+    if (displayAddress && router.isReady) {
+      setIsLoadingTrends(true);
+      
+      // Pass the address and location context to Gemini
+      getNeighborhoodTrends(displayAddress, displayLocation)
+        .then((data) => {
+          setTrends(data);
+        })
+        .catch((err) => {
+          console.error("AI Trends fetch failed:", err);
+        })
         .finally(() => setIsLoadingTrends(false));
     }
-  }, [router.query.property, region.city]);
+  }, [router.isReady, router.query]);
 
+  // --- 3. Actions & Handlers ---
   const addManualCategory = () => {
     const newItem: EvidenceItem = {
       id: generateUniqueId(),
@@ -52,17 +68,12 @@ const EvidenceBuilderView: React.FC = () => {
       const reader = new FileReader();
       reader.onload = async (re) => {
         const base64Data = re.target?.result as string;
-        
         try {
-          // AI analyzes the image specifically for property protest evidence
           const suggestion = await analyzeDocument(base64Data, file.type);
-  
           const newItem: EvidenceItem = {
             id: generateUniqueId(),
-            // Use the AI's suggested title (e.g., "Foundation Cracks") instead of "Document"
             category: suggestion.docType || (type === 'photo' ? 'Condition Photo' : 'Evidence Document'),
-            // Use the AI's full reasoning instead of just "Scanned"
-            userRationale: suggestion.description || 'AI could not determine details. Please describe this issue.',
+            userRationale: suggestion.description || 'AI could not determine details.',
             amount: suggestion.amount,
             date: suggestion.date,
             attachments: [{
@@ -73,7 +84,6 @@ const EvidenceBuilderView: React.FC = () => {
               aiData: suggestion
             }]
           };
-          
           setItems(prev => [...prev, newItem]);
         } catch (err) {
           console.error("AI scanning failed", err);
@@ -91,24 +101,10 @@ const EvidenceBuilderView: React.FC = () => {
       const reader = new FileReader();
       reader.onload = async (re) => {
         const base64Data = re.target?.result as string;
-        const newAttachment = {
-          url: base64Data,
-          type: type,
-          mimeType: file.type,
-          name: file.name
-        };
-
-        setItems(prev => prev.map(item => {
-          if (item.id === itemId) {
-            return {
-              ...item,
-              attachments: [...item.attachments, newAttachment],
-              isTrendSeed: false
-            };
-          }
-          return item;
-        }));
-        e.target.value = '';
+        const newAttachment = { url: base64Data, type, mimeType: file.type, name: file.name };
+        setItems(prev => prev.map(item => 
+          item.id === itemId ? { ...item, attachments: [...item.attachments, newAttachment], isTrendSeed: false } : item
+        ));
       };
       reader.readAsDataURL(file);
     }
@@ -127,15 +123,9 @@ const EvidenceBuilderView: React.FC = () => {
   };
 
   const removeAttachment = (itemId: string, attachmentUrl: string) => {
-    setItems(prev => prev.map(item => {
-      if (item.id === itemId) {
-        return {
-          ...item,
-          attachments: item.attachments.filter(a => a.url !== attachmentUrl)
-        };
-      }
-      return item;
-    }));
+    setItems(prev => prev.map(item => 
+      item.id === itemId ? { ...item, attachments: item.attachments.filter(a => a.url !== attachmentUrl) } : item
+    ));
   };
 
   const handleFinalize = () => {
@@ -144,25 +134,27 @@ const EvidenceBuilderView: React.FC = () => {
       router.push({
         pathname: '/letter',
         query: {
-           property: JSON.stringify(property),
+           property: JSON.stringify(property || { address: router.query.address }),
            evidence: JSON.stringify(items),
            requestedValue: requestedValue.toString()
         }
       });
-    }, 2000);
+    }, 1500);
   };
 
+  // --- 4. Render ---
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12">
+    <div className="max-w-7xl mx-auto px-6 py-12 bg-slate-50 min-h-screen">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         
+        {/* Sidebar: Savings & Trends */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl border border-slate-800">
             <h3 className="font-bold flex items-center gap-2 mb-4 text-emerald-400">
               <TrendingDown size={18} /> Est. Annual Savings
             </h3>
             <div className="text-4xl font-black mb-1">${estimatedSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-            <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-6">Based on Target: ${requestedValue.toLocaleString()}</p>
+            <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-6">Target: ${requestedValue.toLocaleString()}</p>
             
             <div className="space-y-4 pt-4 border-t border-slate-800">
               <div>
@@ -212,6 +204,7 @@ const EvidenceBuilderView: React.FC = () => {
           </div>
         </div>
 
+        {/* Main Content: Locker */}
         <div className="lg:col-span-3 space-y-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -219,13 +212,10 @@ const EvidenceBuilderView: React.FC = () => {
               <p className="text-slate-600 font-medium">Group photos and documents by condition or issue.</p>
             </div>
             <div className="flex gap-4">
-              <button 
-                onClick={addManualCategory}
-                className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-2 transition-all hover:bg-slate-800 shadow-xl active:scale-95"
-              >
+              <button onClick={addManualCategory} className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl active:scale-95">
                 <Plus size={22} /> Add
               </button>
-              <label className="cursor-pointer bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-2 transition-all hover:bg-blue-700 shadow-xl shadow-blue-500/20 active:scale-95">
+              <label className="cursor-pointer bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20 active:scale-95">
                 <Upload size={22} /> Upload File
                 <input type="file" className="hidden" multiple accept="image/*,.pdf" onChange={(e) => handleGlobalFileUpload(e, 'photo')} />
               </label>
@@ -246,27 +236,27 @@ const EvidenceBuilderView: React.FC = () => {
                   <Construction size={32} />
                 </div>
                 <h3 className="text-xl font-bold mb-2">Locker is Empty</h3>
-                <p className="text-slate-500 mb-4 max-w-sm mx-auto">Upload a file, click "Add", or use a neighborhood trend to begin building your case categories.</p>
+                <p className="text-slate-500 mb-4 max-w-sm mx-auto text-sm font-medium">Upload a file, click "Add", or use a neighborhood trend above.</p>
               </div>
             )}
 
             {items.map((item) => (
-              <div key={item.id} className={`bg-white rounded-3xl border shadow-sm transition-all ${item.isTrendSeed ? 'border-blue-200 ring-2 ring-blue-50' : 'border-slate-200'} flex flex-col`}>
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-  <input 
-    type="text"
-    className="text-lg font-bold bg-transparent border-none focus:ring-0 p-0 text-slate-900 w-full min-w-0 block"
-    value={item.category}
-    placeholder="Enter title..."
-    onChange={(e) => setItems(prev => prev.map(i => i.id === item.id ? { ...i, category: e.target.value } : i))}
-  />
-  {item.isTrendSeed && (
-    <span className="flex-shrink-0 text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
-      <Sparkles size={10} /> Neighborhood Trend
-    </span>
-  )}
-</div>
+              <div key={item.id} className={`bg-white rounded-3xl border shadow-sm transition-all ${item.isTrendSeed ? 'border-blue-200 ring-4 ring-blue-50' : 'border-slate-200'} flex flex-col overflow-hidden`}>
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <input 
+                      type="text"
+                      className="text-lg font-bold bg-transparent border-none focus:ring-0 p-0 text-slate-900 w-full"
+                      value={item.category}
+                      placeholder="Category Title..."
+                      onChange={(e) => setItems(prev => prev.map(i => i.id === item.id ? { ...i, category: e.target.value } : i))}
+                    />
+                    {item.isTrendSeed && (
+                      <span className="flex-shrink-0 text-[10px] font-bold bg-blue-600 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Sparkles size={10} /> AI Trend
+                      </span>
+                    )}
+                  </div>
                   <button onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))} className="text-slate-300 hover:text-red-500 transition-colors">
                     <Trash2 size={20} />
                   </button>
@@ -281,20 +271,16 @@ const EvidenceBuilderView: React.FC = () => {
                           {at.type === 'photo' ? (
                             <Image src={at.url} className="w-full h-full object-cover" alt="Upload" width={100} height={100} />
                           ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400">
+                            <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400 bg-white">
                               <FileText size={24} />
                               <span className="text-[8px] font-bold uppercase truncate px-1 w-full text-center">{at.name}</span>
                             </div>
                           )}
-                          <button 
-                            onClick={() => removeAttachment(item.id, at.url)}
-                            className="absolute top-1 right-1 bg-white/90 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm text-red-500"
-                          >
+                          <button onClick={() => removeAttachment(item.id, at.url)} className="absolute top-1 right-1 bg-white/90 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm text-red-500">
                             <X size={12} />
                           </button>
                         </div>
                       ))}
-                      
                       <label className="aspect-square rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-all cursor-pointer">
                         <ImagePlus size={20} />
                         <span className="text-[8px] font-bold uppercase mt-1">Photo</span>
@@ -313,7 +299,7 @@ const EvidenceBuilderView: React.FC = () => {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Technical Rationale</label>
                       <textarea 
                         className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/10 min-h-[140px] text-sm leading-relaxed"
-                        placeholder={item.placeholder || "Reasoning..."}
+                        placeholder={item.placeholder || "Describe the issue..."}
                         value={item.userRationale}
                         onChange={(e) => setItems(prev => prev.map(i => i.id === item.id ? { ...i, userRationale: e.target.value } : i))}
                       />
@@ -321,23 +307,11 @@ const EvidenceBuilderView: React.FC = () => {
                     <div className="flex gap-4">
                       <div className="flex-grow">
                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Est. Repair Cost</label>
-                         <input 
-                            type="text" 
-                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold"
-                            placeholder="$0.00"
-                            value={item.amount || ''}
-                            onChange={(e) => setItems(prev => prev.map(i => i.id === item.id ? { ...i, amount: e.target.value } : i))}
-                         />
+                         <input type="text" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold" placeholder="$0.00" value={item.amount || ''} onChange={(e) => setItems(prev => prev.map(i => i.id === item.id ? { ...i, amount: e.target.value } : i))} />
                       </div>
                       <div className="flex-grow">
                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Evidence Date</label>
-                         <input 
-                            type="text" 
-                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold"
-                            placeholder="Current"
-                            value={item.date || ''}
-                            onChange={(e) => setItems(prev => prev.map(i => i.id === item.id ? { ...i, date: e.target.value } : i))}
-                         />
+                         <input type="text" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold" placeholder="Current" value={item.date || ''} onChange={(e) => setItems(prev => prev.map(i => i.id === item.id ? { ...i, date: e.target.value } : i))} />
                       </div>
                     </div>
                   </div>
@@ -349,17 +323,17 @@ const EvidenceBuilderView: React.FC = () => {
           {items.length > 0 && (
             <div className="mt-12 bg-slate-900 rounded-3xl p-10 text-white flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl">
               <div className="flex items-center gap-6">
-                <div className="p-5 bg-blue-600 text-white rounded-2xl shadow-lg">
+                <div className="p-5 bg-blue-600 text-white rounded-2xl shadow-lg animate-pulse">
                   <Wand2 size={40} />
                 </div>
                 <div>
                   <h3 className="text-2xl font-bold">Ready to Finalize</h3>
-                  <p className="text-slate-400 text-sm">We&apos;ll combine your {items.length} categories into a legal packet.</p>
+                  <p className="text-slate-400 text-sm">Combine {items.length} categories into your legal protest packet.</p>
                 </div>
               </div>
               <button 
                 onClick={handleFinalize}
-                disabled={isFinalizing || items.length === 0}
+                disabled={isFinalizing}
                 className="bg-blue-600 text-white px-12 py-5 rounded-2xl font-bold flex items-center gap-3 hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50 min-w-[350px] justify-center text-xl active:scale-95"
               >
                 {isFinalizing ? <Loader2 size={24} className="animate-spin" /> : <>Assemble My Packet <ArrowRight size={20} /></>}

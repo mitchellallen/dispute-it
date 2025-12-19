@@ -127,14 +127,23 @@ export async function analyzeDocument(base64Data: string, mimeType: string) {
 
 // 5. NEIGHBORHOOD TRENDS (Dynamic)
 export async function getNeighborhoodTrends(address: string, location: string) {
+  // Use a fallback if location is missing
+  const context = location || address || "Dallas, Texas"; 
+  
   const prompt = `
-    Identify 3 real-world property tax trends or common issues for ${location}.
+    Identify 3 real-world property tax trends that qualify as disputable, common over-assessments, or 
+    typical maintenance issues that affect property tax values specifically in ${context}.
     Return JSON Array: [{"title": string, "reason": string, "placeholder": string}]
   `;
+  
   try {
     const res = await callGemini(prompt, true);
-    return JSON.parse(res);
+    const parsed = JSON.parse(res);
+    // Log for debugging in the IDE
+    console.log("Gemini Trends Response:", parsed); 
+    return parsed;
   } catch (e) {
+    console.error("Gemini Trends Error:", e);
     return [];
   }
 }
@@ -144,5 +153,9 @@ export async function refineText(text: string, instruction: string): Promise<str
 }
 
 export async function generateSuggestedEvidence(task: any) {
-  return { userRationale: `Evidence for ${task.category}`, instruction: "Upload a clear photo." };
+  // Returns a simple instruction based on the category
+  return { 
+    userRationale: `Potential evidence for ${task.category}`, 
+    instruction: "Upload a clear photo or document supporting this claim." 
+  };
 }
