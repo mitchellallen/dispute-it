@@ -32,3 +32,5 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  - variable: NEXT_PUBLIC_GEMINI_API_KEY
+    secret: NEXT_PUBLIC_GEMINI_API_KEY
