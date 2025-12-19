@@ -1,36 +1,65 @@
-// lib/deadlineService.ts
+/**
+ * deadlineService.ts
+ * Manages state-specific property tax protest deadlines.
+ */
 
 export interface DeadlineInfo {
-    days: number;
-    deadlineDate: string;
-    region: string;
+    days: number;           // Required for badge count
+    label: string;          // Required for badge text
+    isExpired: boolean;     
+    region: string;         // Required by [id].tsx
+    deadlineDate: string;   // Required by [id].tsx
   }
   
-  export const getDynamicDeadline = (state?: string, county?: string): DeadlineInfo => {
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    
-    // Default: Standard Texas May 15th
-    let deadlineDate = new Date(currentYear + 1, 4, 15); 
-    let region = "Dallas";
+  const STATE_DEADLINES: Record<string, { month: number; day: number; name: string }> = {
+    'FL': { month: 8, day: 15, name: 'Florida Deadline' },    // Sept 15
+    'TX': { month: 4, day: 15, name: 'Texas Deadline' },      // May 15
+    'CA': { month: 11, day: 10, name: 'California Deadline' }, // Dec 10
+  };
   
-    if (state === 'TX') {
-      deadlineDate = new Date(currentYear + 1, 4, 15);
-      region = county ? county.replace(' County', '').replace(' Appraisal District', '') : "Dallas";
-    } else if (state === 'CA') {
-      deadlineDate = new Date(currentYear, 10, 30);
-      region = "California";
-    } else if (state === 'FL') {
-      deadlineDate = new Date(currentYear, 8, 15);
-      region = "Florida";
+  /**
+   * Modern logic to handle year-rollover automatically.
+   */
+  export function getDeadlineData(stateCode: string, county?: string): DeadlineInfo {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const upperState = stateCode?.toUpperCase() || 'TX';
+    
+    // Default to Texas if state is missing
+    const config = STATE_DEADLINES[upperState] || { month: 4, day: 15, name: 'Tax Deadline' };
+    
+    // Create deadline date for current year
+    let targetDate = new Date(currentYear, config.month, config.day);
+  
+    // IF today is past the deadline, move to next year (Fixes Florida 0 error)
+    if (now > targetDate) {
+      targetDate = new Date(currentYear + 1, config.month, config.day);
     }
   
-    const diff = deadlineDate.getTime() - today.getTime();
-    const days = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    const diffTime = targetDate.getTime() - now.getTime();
+    const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const options: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric' };
+    const formattedDate = targetDate.toLocaleDateString('en-US', options).toUpperCase();
     
     return {
       days,
-      deadlineDate: deadlineDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-      region
+      label: `${config.name.toUpperCase()}: ${formattedDate}`,
+      isExpired: days <= 0,
+      region: county ? `${county.toUpperCase()}, ${upperState}` : upperState,
+      deadlineDate: formattedDate
     };
-  };
+  }
+  
+  /**
+   * DYNAMIC BRIDGE: Now accepts 2 arguments to match your frontend
+   */
+  export function getDynamicDeadline(stateCode: string, county?: string): DeadlineInfo {
+    return getDeadlineData(stateCode, county);
+  }
+  
+  /**
+   * Simple helper for other components
+   */
+  export function getDaysUntilDeadline(stateCode: string): number {
+    return getDeadlineData(stateCode).days;
+  }
