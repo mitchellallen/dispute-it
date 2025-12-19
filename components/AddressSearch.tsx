@@ -1,13 +1,12 @@
-import React from 'react';
-import usePlacesAutocomplete, { getGeocode, getLatLng } from "use-places-autocomplete";
-import { Combobox, ComboboxInput, ComboboxPopover, ComboboxList, ComboboxOption } from "@reach/combobox";
-import "@reach/combobox/styles.css";
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { Search } from 'lucide-react';
+import { Search, MapPin } from 'lucide-react';
+import usePlacesAutocomplete, { getGeocode, getLatLng } from "use-places-autocomplete";
 
-const AddressSearch = () => {
+export default function AddressSearch() {
   const router = useRouter();
   
+  // 1. Google Places Autocomplete Hook
   const {
     ready,
     value,
@@ -15,62 +14,80 @@ const AddressSearch = () => {
     setValue,
     clearSuggestions,
   } = usePlacesAutocomplete({
-    requestOptions: {
-      componentRestrictions: { country: "us" },
-      locationBias: { radius: 10000, center: { lat: 32.7767, lng: -96.7970 } }, 
-    },
+    requestOptions: { componentRestrictions: { country: "us" } },
     debounce: 300,
   });
 
-  const handleSelect = async (address: string) => {
-    setValue(address, false);
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(e.target.value);
+  };
+
+  const handleSelect = ({ description }: any) => () => {
+    setValue(description, false);
     clearSuggestions();
 
-    try {
-      const results = await getGeocode({ address });
-      if (results && results.length > 0) {
-        const { lat, lng } = await getLatLng(results[0]);
-        const components = results[0].address_components;
-        
-        const state = components.find(c => c.types.includes("administrative_area_level_1"))?.short_name || 'TX';
-        const county = components.find(c => c.types.includes("administrative_area_level_2"))?.long_name || 'Dallas County';
-        
-        router.push({
-          pathname: `/property/p1`,
-          query: { address, lat, lng, state, county }
-        });
-      }
-    } catch (error) {
-      console.error("Search error:", error);
-    }
+    // Parse City/State for the URL flow
+    getGeocode({ address: description }).then((results) => {
+      const { lat, lng } = getLatLng(results[0]);
+      const city = results[0].address_components.find(c => c.types.includes("locality"))?.long_name;
+      const state = results[0].address_components.find(c => c.types.includes("administrative_area_level_1"))?.short_name;
+
+      router.push({
+        pathname: `/property/current`,
+        query: {
+          address: description,
+          city: city || "Dallas",
+          state: state || "TX",
+          lat,
+          lng
+        }
+      });
+    });
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto">
-      <Combobox onSelect={handleSelect}>
-        <div className="flex items-center bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl focus-within:ring-2 focus-within:ring-blue-500">
-          <div className="pl-6 text-slate-400"><Search size={22} /></div>
-          <ComboboxInput
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            disabled={!ready}
-            className="w-full bg-transparent text-white px-4 py-6 outline-none text-lg font-medium"
-            placeholder="Enter your home address..."
-          />
-          <button className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 m-2 rounded-xl font-bold transition-all">
-            Start My Protest →
-          </button>
+    <div className="w-full max-w-5xl mx-auto px-6 mt-16 relative">
+      <div className="relative flex items-center">
+        <div className="absolute left-6 pointer-events-none z-10">
+          <MapPin className="text-blue-500 h-6 w-6 opacity-70" />
         </div>
-        <ComboboxPopover className="z-50 border-none shadow-2xl rounded-xl mt-2 overflow-hidden">
-          <ComboboxList className="bg-white py-2">
-            {status === "OK" && data.map(({ place_id, description }) => (
-              <ComboboxOption key={place_id} value={description} className="px-4 py-3 hover:bg-blue-50 cursor-pointer text-slate-900 font-medium" />
-            ))}
-          </ComboboxList>
-        </ComboboxPopover>
-      </Combobox>
+        
+        <input
+          type="text"
+          placeholder="Enter your property address..."
+          value={value}
+          onChange={handleInput}
+          disabled={!ready}
+          /* Dark Grey Styling Restored */
+          className="w-full bg-slate-800 border-2 border-slate-700 text-white text-xl font-bold py-7 pl-16 pr-52 rounded-3xl focus:outline-none focus:border-blue-500 transition-all shadow-2xl"
+        />
+
+        <button 
+          className="absolute right-3 bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl font-black text-lg flex items-center gap-2"
+        >
+          <Search size={22} /> Search Property
+        </button>
+      </div>
+
+      {/* 2. Dropdown Suggestions with Dark Styling */}
+      {status === "OK" && (
+        <ul className="absolute z-50 w-[calc(100%-3rem)] mt-2 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+          {data.map((suggestion) => (
+            <li 
+              key={suggestion.place_id}
+              onClick={handleSelect(suggestion)}
+              className="px-6 py-4 text-white hover:bg-blue-600 cursor-pointer border-b border-slate-700/50 last:border-none transition-colors"
+            >
+              <strong className="block text-sm">{suggestion.structured_formatting.main_text}</strong>
+              <span className="text-[10px] text-slate-400 uppercase font-black">{suggestion.structured_formatting.secondary_text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      
+      <p className="mt-4 text-center text-slate-500 text-[10px] font-black uppercase tracking-[0.3em]">
+        AI-Powered Protest Support for Dallas County
+      </p>
     </div>
   );
-};
-
-export default AddressSearch;
+}

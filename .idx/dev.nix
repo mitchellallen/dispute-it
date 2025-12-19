@@ -11,7 +11,9 @@
     pkgs.bun
   ];
   # Sets environment variables in the workspace
-  env = {};
+  env = {
+    NEXT_PUBLIC_GOOGLE_AI_KEY = "YOUR_API_KEY";
+  };
   idx = {
     # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
     extensions = [
