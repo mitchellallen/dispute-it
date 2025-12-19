@@ -11,30 +11,25 @@ const EvidenceBuilderView = () => {
   const router = useRouter();
   const [items, setItems] = useState<EvidenceItem[]>([]);
   const [trends, setTrends] = useState<Trend[]>([]);
-  const [isLoadingTrends, setIsLoadingTrends] = useState(false); // Start false, flip true on load
+  const [isLoadingTrends, setIsLoadingTrends] = useState(false);
+  
+  // RESTORED: This state controls the Blue Box
   const [isScanning, setIsScanning] = useState(false);
+  
   const [property, setProperty] = useState<Property | null>(null);
   const [requestedValue, setRequestedValue] = useState(0);
 
-  // 1. Initialize Data
   useEffect(() => {
     if (!router.isReady) return;
-    
     if (router.query.property) {
       try {
         const parsedProp = JSON.parse(router.query.property as string);
         setProperty(parsedProp);
         setRequestedValue(parsedProp.assessedValue * 0.85);
-
-        // Fetch Trends
         setIsLoadingTrends(true);
         getNeighborhoodTrends(parsedProp.address, "Dallas, TX")
-          .then(data => {
-            if (data && data.length > 0) setTrends(data);
-          })
-          .catch(err => console.error("Trend Error", err))
+          .then(data => { if (data && data.length > 0) setTrends(data); })
           .finally(() => setIsLoadingTrends(false));
-          
       } catch (e) { console.error("Parse error", e); }
     }
   }, [router.isReady]);
@@ -43,11 +38,14 @@ const EvidenceBuilderView = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    // 1. Trigger the Blue Box
     setIsScanning(true);
+    
     const reader = new FileReader();
     reader.onload = async (re) => {
       const base64Data = re.target?.result as string;
-      // AI Call
+      
+      // 2. Call AI (Scanning Box stays visible)
       const suggestion = await analyzeDocument(base64Data, file.type);
       
       const newItem: EvidenceItem = {
@@ -59,6 +57,7 @@ const EvidenceBuilderView = () => {
         displayType: 'photo'
       };
       
+      // 3. Add Item and Hide Blue Box
       setItems(prev => [newItem, ...prev]);
       setIsScanning(false);
     };
@@ -80,6 +79,10 @@ const EvidenceBuilderView = () => {
 
   const removeAttachment = (itemId: string, indexToRemove: number) => {
     setItems(prev => prev.map(item => item.id === itemId ? { ...item, attachments: item.attachments.filter((_, idx) => idx !== indexToRemove) } : item));
+  };
+
+  const toggleDisplayType = (itemId: string) => {
+    setItems(prev => prev.map(item => item.id === itemId ? { ...item, displayType: item.displayType === 'photo' ? 'document' : 'photo' } : item));
   };
 
   const addTrendToLocker = (t: Trend) => {
@@ -116,9 +119,19 @@ const EvidenceBuilderView = () => {
             <div><h1 className="text-5xl font-black tracking-tighter mb-1">Evidence Locker</h1></div>
             <div className="flex gap-4">
               <button onClick={() => setItems(prev => [{ id: generateUniqueId(), title: "", description: "", attachments: [], isAiGenerated: false, displayType: 'photo' }, ...prev])} className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold">+ Add</button>
-              <label className="cursor-pointer bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-2"><Wand2 size={22} /> {isScanning ? 'Scanning...' : 'Upload Photo'} <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*" /></label>
+              <label className={`cursor-pointer bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all ${isScanning ? 'opacity-50 pointer-events-none' : ''}`}>
+                <Wand2 size={22} /> Upload Photo <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*" />
+              </label>
             </div>
           </div>
+
+          {/* RESTORED: Blue Scanning Box */}
+          {isScanning && (
+            <div className="p-12 bg-blue-50 border-2 border-dashed border-blue-200 rounded-[2.5rem] flex flex-col items-center animate-pulse">
+              <Loader2 size={40} className="animate-spin text-blue-600 mb-4" />
+              <p className="text-blue-900 font-black uppercase tracking-widest text-xs">AI Analyzing Photo...</p>
+            </div>
+          )}
 
           <div className="grid gap-8">
             {items.map((item) => (
@@ -127,26 +140,11 @@ const EvidenceBuilderView = () => {
                   <div className="flex-grow mr-4">
                      <input className="text-3xl font-black w-full bg-transparent border-none text-slate-900 focus:ring-0" value={item.title} placeholder="Issue Title" onChange={(e) => setItems(prev => prev.map(i => i.id === item.id ? {...i, title: e.target.value} : i))} />
                   </div>
-
-                  {/* NEW TOGGLE SWITCH */}
-                  <div className="flex bg-slate-200 p-1 rounded-xl mr-4">
-                    <button 
-                      onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, displayType: 'photo' } : i))}
-                      className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${item.displayType === 'photo' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                      <ImageIcon size={14} /> Photo
-                    </button>
-                    <button 
-                      onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, displayType: 'document' } : i))}
-                      className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${item.displayType === 'document' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                      <FileIcon size={14} /> Document
-                    </button>
-                  </div>
-                  
-                  <button onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))} className="text-slate-300 hover:text-red-500"><Trash2 size={24} /></button>
+                  <button onClick={() => toggleDisplayType(item.id)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${item.displayType === 'document' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
+                    {item.displayType === 'document' ? <><FileIcon size={14}/> Document</> : <><ImageIcon size={14}/> Photo</>}
+                  </button>
+                  <button onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))} className="text-slate-300 hover:text-red-500 ml-4"><Trash2 size={24} /></button>
                 </div>
-
                 <div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-12 text-slate-900">
                   <div className="space-y-4">
                      <textarea className="w-full p-6 bg-slate-50 rounded-3xl border-none font-medium text-slate-900 min-h-[160px] focus:ring-2 focus:ring-blue-100" value={item.description} placeholder="Describe the issue..." onChange={(e) => setItems(prev => prev.map(i => i.id === item.id ? {...i, description: e.target.value} : i))} />

@@ -18,7 +18,7 @@ function parseGeminiResponse(text: string) {
     const clean = text.replace(/```json|```/g, "").trim();
     return JSON.parse(clean);
   } catch (e) {
-    console.warn("JSON Parse Failed. Raw text:", text);
+    console.warn("JSON Parse Failed:", text);
     return null;
   }
 }
@@ -30,10 +30,7 @@ async function callGemini(prompt: string): Promise<string | null> {
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
     });
     const data = await response.json();
-    if (!data.candidates || !data.candidates[0]) {
-      console.error("Gemini API Error:", data);
-      return null;
-    }
+    if (!data.candidates || !data.candidates[0]) return null;
     return data.candidates[0].content.parts[0].text;
   } catch (error) {
     console.error("Network Error:", error);
@@ -46,7 +43,7 @@ export async function getNeighborhoodTrends(address: string, location: string): 
   const prompt = `You are a tax consultant. Provide 3 market trends for ${address} in ${location}. Return ONLY JSON array: [{"title": "Header", "reason": "Explanation"}]`;
   const text = await callGemini(prompt);
   const data = text ? parseGeminiResponse(text) : null;
-
+  
   if (!data || !Array.isArray(data) || data.length === 0) {
     return [
       { title: "Unequal Appraisal", reason: "Nearby homes with similar builds are assessed lower per sqft." },
@@ -57,18 +54,18 @@ export async function getNeighborhoodTrends(address: string, location: string): 
   return data;
 }
 
-// 2. VISION ANALYSIS (Fixed Base64 Handling)
+// 2. VISION ANALYSIS (RESTORED WORKING LOGIC)
 export async function analyzeDocument(base64Data: string, mimeType: string): Promise<{docType: string, description: string}> {
   try {
-    // CRITICAL FIX: Aggressively remove the data URL header
-    const cleanBase64 = base64Data.split(',').pop(); 
+    // STRICT FIX: Ensure we only send the raw base64 string, no headers
+    const cleanBase64 = base64Data.includes("base64,") ? base64Data.split("base64,")[1] : base64Data;
 
     const response = await fetch(`${BASE_URL}?key=${API_KEY}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{
           parts: [
-            { text: "Analyze this image for property tax protest. Identify the issue (e.g. Cracks, Water Damage, Receipt). Return JSON: {\"docType\": \"Short Title\", \"description\": \"2 sentences describing the issue.\"}" },
+            { text: "Analyze this image for property tax protest. Identify the specific issue (e.g. Foundation Cracks, Water Damage, Receipt). Return JSON: {\"docType\": \"Short Title\", \"description\": \"2 sentences describing the damage technically.\"}" },
             { inlineData: { mimeType: mimeType || "image/jpeg", data: cleanBase64 } }
           ]
         }]
@@ -77,10 +74,10 @@ export async function analyzeDocument(base64Data: string, mimeType: string): Pro
     
     const data = await response.json();
     
-    // Log the error if Google rejects the image
+    // Explicitly check for Google API errors to debug
     if (data.error) {
-      console.error("Google Vision API Error:", data.error);
-      throw new Error(data.error.message);
+      console.error("Google API Error:", data.error.message);
+      throw new Error("AI Processing Failed");
     }
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -89,16 +86,16 @@ export async function analyzeDocument(base64Data: string, mimeType: string): Pro
     const result = parseGeminiResponse(text);
     
     return {
-      docType: result?.docType || "Evidence Item",
+      docType: result?.docType || "Issue Identified",
       description: result?.description || "Analysis complete. Review details."
     };
 
   } catch (e) {
-    console.error("Vision Processing Failed:", e);
-    // Return a clean fallback so the user can still edit
+    console.error("Vision Error:", e);
+    // Return a clean fallback
     return { 
-      docType: "Photo Uploaded", 
-      description: "AI could not process this specific image. Please add a description." 
+      docType: "New Evidence", 
+      description: "AI analysis failed. Please describe the issue manually." 
     };
   }
 }
@@ -113,7 +110,6 @@ export async function draftProtestLetter(property: Property, evidence: EvidenceI
   return await callGemini(prompt) || "Drafting letter...";
 }
 
-// 4. STRATEGY & SCORE
 export async function getAIStrategyReview(property: Property, evidence: EvidenceItem[]): Promise<StrategyItem[]> {
   const text = await callGemini(`Analyze case for ${property.address}. 3 strategy gaps. JSON array: [{"category": "Title", "rationale": "Text"}]`);
   const data = text ? parseGeminiResponse(text) : null;
