@@ -13,26 +13,49 @@ const EvidenceBuilderView = () => {
   const [trends, setTrends] = useState<Trend[]>([]);
   const [isLoadingTrends, setIsLoadingTrends] = useState(false);
   
-  // RESTORED: This state controls the Blue Box
+  // Controls the Blue Box Animation
   const [isScanning, setIsScanning] = useState(false);
   
   const [property, setProperty] = useState<Property | null>(null);
   const [requestedValue, setRequestedValue] = useState(0);
 
+  // FIXED: Robust useEffect that handles both JSON objects AND plain text addresses
   useEffect(() => {
     if (!router.isReady) return;
+
     if (router.query.property) {
+      const rawParam = router.query.property as string;
+      let parsedProp: Property;
+
       try {
-        const parsedProp = JSON.parse(router.query.property as string);
-        setProperty(parsedProp);
+        // 1. Try to parse as a full JSON object (if coming from specialized link)
+        parsedProp = JSON.parse(rawParam);
+      } catch (e) {
+        // 2. Fallback: It is a plain address string (from Search Bar)
+        parsedProp = {
+          id: Date.now().toString(),
+          address: rawParam,
+          assessedValue: 0, // Default to 0, user can edit later
+          requestedValue: 0,
+          lat: parseFloat(router.query.lat as string || "0"),
+          lng: parseFloat(router.query.lng as string || "0")
+        };
+      }
+
+      setProperty(parsedProp);
+
+      // Only calculate savings if we actually have a value
+      if (parsedProp.assessedValue > 0) {
         setRequestedValue(parsedProp.assessedValue * 0.85);
-        setIsLoadingTrends(true);
-        getNeighborhoodTrends(parsedProp.address, "Dallas, TX")
-          .then(data => { if (data && data.length > 0) setTrends(data); })
-          .finally(() => setIsLoadingTrends(false));
-      } catch (e) { console.error("Parse error", e); }
+      }
+
+      // Always fetch trends based on the address
+      setIsLoadingTrends(true);
+      getNeighborhoodTrends(parsedProp.address, "Dallas, TX")
+        .then(data => { if (data && data.length > 0) setTrends(data); })
+        .finally(() => setIsLoadingTrends(false));
     }
-  }, [router.isReady]);
+  }, [router.isReady, router.query]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -125,7 +148,7 @@ const EvidenceBuilderView = () => {
             </div>
           </div>
 
-          {/* RESTORED: Blue Scanning Box */}
+          {/* Blue Scanning Box */}
           {isScanning && (
             <div className="p-12 bg-blue-50 border-2 border-dashed border-blue-200 rounded-[2.5rem] flex flex-col items-center animate-pulse">
               <Loader2 size={40} className="animate-spin text-blue-600 mb-4" />
