@@ -91,6 +91,8 @@ const EvidenceBuilderView = () => {
       isAiGenerated: true, 
       displayType: 'photo'
     }, ...prev]);
+    // 2. NEW LOGIC: Remove the trend from the visible trends list
+    setTrends(prevTrends => prevTrends.filter(trend => trend.title !== t.title));
   };
 
   const updateEvidenceItem = (id: string, updatedItem: EvidenceItem) => {
