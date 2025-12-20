@@ -6,6 +6,7 @@ runConfig:
   maxInstances: 100
 
 env:
+  # Browser Keys (Secure Vault)
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     secret: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     availability:
@@ -18,6 +19,7 @@ env:
       - BUILD
       - RUNTIME
 
+  # Server Keys (Secure Vault)
   - variable: NEXT_PUBLIC_RENTSCAST_API_KEY
     secret: NEXT_PUBLIC_RENTSCAST_API_KEY
     availability:
