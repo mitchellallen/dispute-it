@@ -18,6 +18,6 @@ runConfig:
         - BUILD
         - RUNTIME
     - variable: NEXT_PUBLIC_GEMINI_API_KEY
-      value: AIzaSyBk5TFKiq0j1iRN7svynIG6QrfLF4-fnBY
+      value: AIzaSyCo5gf3ddPWjxjAXnNuulMmrtkh3zNpSyM
     - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-      value: AIzaSyDBjP46Cq1kordOLCACwkimWQqWoKhJci1E
+      value: AIzaSyCo5gf3ddPWjxjAXnNuulMmrtkh3zNpSyM
