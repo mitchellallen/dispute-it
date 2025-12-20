@@ -1,23 +1,21 @@
-# apphosting.yaml
 runConfig:
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 2048
   minInstances: 0
-  env:
-    - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-      secret: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-      availability:
-        - BUILD
-        - RUNTIME
-    - variable: NEXT_PUBLIC_RENTCAST_API_KEY
-      secret: NEXT_PUBLIC_RENTCAST_API_KEY
-      availability:
-        - BUILD
-        - RUNTIME
-    - variable: HASDATA_API_KEY
-      secret: HASDATA_API_KEY
-      availability: # THIS BLOCK IS CRITICAL
-        - BUILD
-        - RUNTIME
-    - variable: NEXT_PUBLIC_GEMINI_API_KEY
-      value: AIzaSyCo5gf3ddPWjxjAXnNuulMmrtkh3zNpSyM
-    - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-      value: AIzaSyCo5gf3ddPWjxjAXnNuulMmrtkh3zNpSyM
+  maxInstances: 100
+
+env:
+  # Restore RentCast (Keep this!)
+  - variable: NEXT_PUBLIC_RENTSCAST_API_KEY
+    secret: NEXT_PUBLIC_RENTSCAST_API_KEY
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # Restore HasData (Keep this!)
+  - variable: HASDATA_API_KEY
+    secret: HASDATA_API_KEY
+    availability:
+      - BUILD
+      - RUNTIME
