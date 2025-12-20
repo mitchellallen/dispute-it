@@ -1,12 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import { Search, MapPin } from 'lucide-react';
+import { useEffect, useRef } from "react";
 import usePlacesAutocomplete, { getGeocode, getLatLng } from "use-places-autocomplete";
+import useOnclickOutside from "react-cool-onclickoutside";
+import { useRouter } from "next/router";
 
 export default function AddressSearch() {
   const router = useRouter();
-  
-  // 1. Google Places Autocomplete Hook
+
   const {
     ready,
     value,
@@ -14,80 +13,87 @@ export default function AddressSearch() {
     setValue,
     clearSuggestions,
   } = usePlacesAutocomplete({
-    requestOptions: { componentRestrictions: { country: "us" } },
+    requestOptions: {
+      /* Define search scope here if needed */
+    },
     debounce: 300,
+  });
+
+  const ref = useOnclickOutside(() => {
+    clearSuggestions();
   });
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setValue(e.target.value);
   };
 
-  const handleSelect = ({ description }: any) => () => {
+  const handleSelect = ({ description }: { description: string }) => {
     setValue(description, false);
     clearSuggestions();
 
-    // Parse City/State for the URL flow
     getGeocode({ address: description }).then((results) => {
       const { lat, lng } = getLatLng(results[0]);
-      const city = results[0].address_components.find(c => c.types.includes("locality"))?.long_name;
-      const state = results[0].address_components.find(c => c.types.includes("administrative_area_level_1"))?.short_name;
+      console.log("📍 Coordinates: ", { lat, lng });
 
-      router.push({
-        pathname: `/property/current`,
-        query: {
-          address: description,
-          city: city || "Dallas",
-          state: state || "TX",
-          lat,
-          lng
-        }
-      });
+      // Navigate to the Evidence Locker with the selected address
+      router.push(`/evidence?property=${encodeURIComponent(description)}&lat=${lat}&lng=${lng}`);
     });
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-6 mt-16 relative">
-      <div className="relative flex items-center">
-        <div className="absolute left-6 pointer-events-none z-10">
-          <MapPin className="text-blue-500 h-6 w-6 opacity-70" />
-        </div>
+    <div ref={ref} className="w-full max-w-2xl mx-auto p-4">
+      <div className="relative flex items-center w-full h-14 rounded-lg focus-within:shadow-lg bg-white overflow-hidden ring-1 ring-gray-900/10">
         
+        {/* ICON */}
+        <div className="grid place-items-center h-full w-12 text-gray-300">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+
+        {/* INPUT: Fully responsive now */}
         <input
+          className="peer h-full w-full outline-none text-sm text-gray-700 pr-2"
           type="text"
-          placeholder="Enter your property address..."
+          id="search"
           value={value}
           onChange={handleInput}
           disabled={!ready}
-          /* Dark Grey Styling Restored */
-          className="w-full bg-slate-800 border-2 border-slate-700 text-white text-xl font-bold py-7 pl-16 pr-52 rounded-3xl focus:outline-none focus:border-blue-500 transition-all shadow-2xl"
+          placeholder="Enter your property address..."
         />
 
+        {/* BUTTON: Search triggers selection logic if needed, or just visual */}
         <button 
-          className="absolute right-3 bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl font-black text-lg flex items-center gap-2"
+            disabled={!ready}
+            className="h-full px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors disabled:bg-gray-400"
         >
-          <Search size={22} /> Search Property
+             Search
         </button>
       </div>
-
-      {/* 2. Dropdown Suggestions with Dark Styling */}
+      
+      {/* DROPDOWN SUGGESTIONS */}
       {status === "OK" && (
-        <ul className="absolute z-50 w-[calc(100%-3rem)] mt-2 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
-          {data.map((suggestion) => (
-            <li 
-              key={suggestion.place_id}
-              onClick={handleSelect(suggestion)}
-              className="px-6 py-4 text-white hover:bg-blue-600 cursor-pointer border-b border-slate-700/50 last:border-none transition-colors"
-            >
-              <strong className="block text-sm">{suggestion.structured_formatting.main_text}</strong>
-              <span className="text-[10px] text-slate-400 uppercase font-black">{suggestion.structured_formatting.secondary_text}</span>
-            </li>
-          ))}
+        <ul className="absolute z-50 mt-1 max-h-60 w-full max-w-2xl overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+          {data.map((suggestion) => {
+            const {
+              place_id,
+              structured_formatting: { main_text, secondary_text },
+            } = suggestion;
+
+            return (
+              <li
+                key={place_id}
+                onClick={() => handleSelect(suggestion)}
+                className="cursor-pointer py-2 px-4 hover:bg-blue-50 text-gray-900 border-b border-gray-100 last:border-0"
+              >
+                <div className="font-medium">{main_text}</div>
+                <div className="text-xs text-gray-500">{secondary_text}</div>
+              </li>
+            );
+          })}
         </ul>
       )}
-      
-      <p className="mt-4 text-center text-slate-500 text-[10px] font-black uppercase tracking-[0.3em]">
-        AI-Powered Protest Support for Dallas County
-      </p>
     </div>
   );
 }
