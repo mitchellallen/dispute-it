@@ -31,10 +31,8 @@ export default function LetterPage() {
 
   // --- Helper: Format numbers with commas as user types ---
   const formatNumberWithCommas = (val: string) => {
-    // Remove everything except numbers
     const numericValue = val.replace(/[^0-9]/g, '');
     if (!numericValue) return '';
-    // Add commas back
     return new Intl.NumberFormat('en-US').format(parseInt(numericValue));
   };
 
@@ -130,15 +128,36 @@ export default function LetterPage() {
       }
     `}} />
 
+    {/* APP VIEW (SCREEN) */}
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 print:hidden">
       <div className="bg-white border-b border-slate-200 sticky top-0 z-20 px-6 py-4 flex justify-between items-center shadow-sm">
         <button onClick={() => router.back()} className="flex items-center text-slate-500 hover:text-slate-900 font-bold gap-2 text-sm">
            <ArrowLeft size={16} /> Back
         </button>
-        <div className="flex items-center gap-4">
-             <button onClick={handleDownloadPacket} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-blue-700 transition shadow-md">
-                <Download size={18} /> Download Packet
-             </button>
+        
+        <div className="flex items-center gap-6">
+          {/* RE-SCAN STATUS INDICATOR */}
+          <div className="text-right hidden md:block border-r border-slate-200 pr-6">
+            <div className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">AI Analysis</div>
+            <button 
+              onClick={runFullAnalysis}
+              disabled={isAnalyzingText}
+              className="text-xs font-bold text-slate-600 flex items-center justify-end gap-1.5 hover:text-blue-600 transition-colors group disabled:opacity-50"
+            >
+              {isAnalyzingText ? (
+                <><Loader2 size={12} className="animate-spin text-blue-500"/> Analyzing...</>
+              ) : (
+                <>
+                  <RefreshCw size={12} className="group-hover:rotate-180 transition-transform duration-500"/>
+                  Up to Date
+                </>
+              )}
+            </button>
+          </div>
+          
+          <button onClick={handleDownloadPacket} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-blue-700 transition shadow-md">
+            <Download size={18} /> Download Packet
+          </button>
         </div>
       </div>
 
@@ -151,16 +170,29 @@ export default function LetterPage() {
                 <div className="space-y-4">
                     <div>
                         <label className="text-[10px] uppercase font-bold text-slate-400">Recipient District</label>
-                        <textarea data-lpignore="true" className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium outline-none h-20 resize-none" value={recipientInfo} onChange={(e) => setRecipientInfo(e.target.value)} />
+                        <textarea 
+                          data-lpignore="true" data-form-type="other" spellCheck={false}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium outline-none h-20 resize-none" 
+                          value={recipientInfo} 
+                          onChange={(e) => setRecipientInfo(e.target.value)} 
+                        />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="text-[10px] uppercase font-bold text-slate-400">Owner Name</label>
-                            <input data-lpignore="true" className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold outline-none" placeholder="Enter Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+                            <input 
+                              data-lpignore="true" data-form-type="other" spellCheck={false} autoComplete="off" 
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold outline-none" 
+                              placeholder="Enter Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} 
+                            />
                         </div>
                         <div>
                              <label className="text-[10px] uppercase font-bold text-slate-400">Account #</label>
-                             <input data-lpignore="true" className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold outline-none" placeholder="Enter Account" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} />
+                             <input 
+                               data-lpignore="true" data-form-type="other" spellCheck={false} autoComplete="off" 
+                               className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold outline-none" 
+                               placeholder="Enter Account" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} 
+                             />
                         </div>
                     </div>
                     <div>
@@ -168,10 +200,10 @@ export default function LetterPage() {
                         <div className="relative">
                             <span className="absolute left-3 top-2 text-slate-400 font-bold">$</span>
                             <input 
-                                data-lpignore="true" 
-                                className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-6 pr-3 py-2 text-sm font-bold outline-none" 
-                                value={taxedValue} 
-                                onChange={(e) => setTaxedValue(formatNumberWithCommas(e.target.value))} 
+                              data-lpignore="true" data-form-type="other" spellCheck={false} autoComplete="off"
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-6 pr-3 py-2 text-sm font-bold outline-none" 
+                              value={taxedValue} 
+                              onChange={(e) => setTaxedValue(formatNumberWithCommas(e.target.value))} 
                             />
                         </div>
                     </div>
@@ -180,10 +212,10 @@ export default function LetterPage() {
                         <div className="relative">
                             <span className="absolute left-3 top-2 text-slate-400 font-bold">$</span>
                             <input 
-                                data-lpignore="true" 
-                                className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-6 pr-3 py-2 text-sm font-bold text-green-600 outline-none" 
-                                value={proposedValue} 
-                                onChange={(e) => setProposedValue(formatNumberWithCommas(e.target.value))} 
+                              data-lpignore="true" data-form-type="other" spellCheck={false} autoComplete="off"
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-6 pr-3 py-2 text-sm font-bold text-green-600 outline-none" 
+                              value={proposedValue} 
+                              onChange={(e) => setProposedValue(formatNumberWithCommas(e.target.value))} 
                             />
                         </div>
                     </div>
@@ -229,14 +261,18 @@ export default function LetterPage() {
                     <p>RE: Property Tax Protest</p>
                     <div className="flex items-center gap-2">
                         <span>Account Number:</span>
-                        <input data-lpignore="true" className="bg-white border border-slate-300 rounded px-2 py-0.5 text-blue-600 w-40 outline-none" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} />
+                        <input 
+                          data-lpignore="true" data-form-type="other" spellCheck={false}
+                          className="bg-white border border-slate-300 rounded px-2 py-0.5 text-blue-600 w-40 outline-none" 
+                          value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} 
+                        />
                     </div>
                     <p>Property Address: {property?.address}</p>
                 </div>
                 <p className="mb-4">To Whom It May Concern,</p>
                 <textarea 
                     ref={letterTextAreaRef}
-                    data-lpignore="true"
+                    data-lpignore="true" data-form-type="other" spellCheck={false}
                     className="w-full min-h-[300px] resize-none p-4 rounded-xl border border-slate-300 hover:border-blue-300 focus:border-blue-400 focus:bg-blue-50/10 outline-none transition-all font-serif leading-7 text-slate-800 overflow-hidden"
                     value={letterBody}
                     onChange={(e) => setLetterBody(e.target.value)}
@@ -267,6 +303,7 @@ export default function LetterPage() {
       </div>
     </div>
 
+    {/* PRINT VIEW (PHANTOM DOC) */}
     <div className="hidden print:block bg-white print-only-container">
         <div className="min-h-[290mm] relative">
             <div className="text-right mb-12 text-sm text-black">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
