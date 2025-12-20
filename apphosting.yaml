@@ -17,3 +17,5 @@ runConfig:
       availability: # THIS BLOCK IS CRITICAL
         - BUILD
         - RUNTIME
+    - variable: NEXT_PUBLIC_GEMINI_API_KEY
+      value: AIzaSyBk5TFKiq0j1iRN7svynIG6QrfLF4-fnBY
