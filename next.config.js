@@ -1,11 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // This forces the keys to be available to the app
-  env: {
-    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: 'AIzaSyCo5gf3ddPWjxjAXnNuulMmrtkh3zNpSyM',
-    NEXT_PUBLIC_GEMINI_API_KEY: 'AIzaSyBk5TFKiq0j1iRN7svynIG6QrfLF4-fnBY',
-  },
+  // Keys are now injected securely by Firebase App Hosting
   images: {
     domains: ['maps.googleapis.com'],
   },
