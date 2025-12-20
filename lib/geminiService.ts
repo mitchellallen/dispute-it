@@ -1,22 +1,19 @@
 // @ts-nocheck
 import { Property, EvidenceItem, Trend, StrategyItem, CaseScore } from './types';
 
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_AI_KEY || "";
-const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+// Matches the variable name in your .env.local file
+const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 
-/**
- * HELPER: Extracts JSON from "chatty" AI responses
- */
+// UPDATED: Switched to "gemini-2.0-flash-exp" as per your successful test history
+const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
+
 function parseGeminiResponse(text: string) {
   try {
     const arrayMatch = text.match(/\[([\s\S]*?)\]/);
     if (arrayMatch) return JSON.parse(arrayMatch[0]);
-
     const objectMatch = text.match(/\{([\s\S]*?)\}/);
     if (objectMatch) return JSON.parse(objectMatch[0]);
-
-    const clean = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
+    return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch (e) {
     console.warn("JSON Parse Failed:", text);
     return null;
@@ -54,10 +51,13 @@ export async function getNeighborhoodTrends(address: string, location: string): 
   return data;
 }
 
-// 2. VISION ANALYSIS (RESTORED WORKING LOGIC)
+// 2. VISION ANALYSIS
 export async function analyzeDocument(base64Data: string, mimeType: string): Promise<{docType: string, description: string}> {
   try {
-    // STRICT FIX: Ensure we only send the raw base64 string, no headers
+    if (base64Data.length > 4000000) {
+      console.warn("⚠️ Image is very large. This might cause API timeout.");
+    }
+
     const cleanBase64 = base64Data.includes("base64,") ? base64Data.split("base64,")[1] : base64Data;
 
     const response = await fetch(`${BASE_URL}?key=${API_KEY}`, {
@@ -74,14 +74,13 @@ export async function analyzeDocument(base64Data: string, mimeType: string): Pro
     
     const data = await response.json();
     
-    // Explicitly check for Google API errors to debug
     if (data.error) {
-      console.error("Google API Error:", data.error.message);
-      throw new Error("AI Processing Failed");
+      console.error("🚨 GOOGLE API ERROR:", data.error.message);
+      throw new Error("API Error: " + data.error.message);
     }
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error("No text returned");
+    if (!text) throw new Error("No text returned from AI");
 
     const result = parseGeminiResponse(text);
     
@@ -91,8 +90,7 @@ export async function analyzeDocument(base64Data: string, mimeType: string): Pro
     };
 
   } catch (e) {
-    console.error("Vision Error:", e);
-    // Return a clean fallback
+    console.error("❌ VISION FAILURE DETAILS:", e);
     return { 
       docType: "New Evidence", 
       description: "AI analysis failed. Please describe the issue manually." 
