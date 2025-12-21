@@ -5,74 +5,52 @@
   --foreground: #171717;
 }
 
-/* commenting out the dark mode for now. 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-*/
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* --- NUCLEAR PRINT OVERRIDES (IOS/SAFARI FIX) --- */
+/* --- PRINT OVERRIDES --- */
 @media print {
-  /* 1. Remove physical page margins so browser has no space for URL/Date */
+  /* 1. Try to remove browser margins (URL/Date) */
   @page {
-    margin: 0 !important;
+    margin: 0mm !important;
     size: auto !important;
   }
 
   /* 2. Reset the page canvas */
   html, body {
-    height: 100vh;
     margin: 0 !important;
     padding: 0 !important;
-    overflow: visible;
     background-color: white !important;
   }
 
-  /* 3. THE MAGIC TRICK: Hide EVERYTHING on the page by default */
-  body * {
-    visibility: hidden;
+  /* 3. Hide Screen UI (Navigation, Buttons, Sidebars) */
+  /* We use the Tailwind '.print-hidden' classes in the code, 
+     but this reinforces it for global elements */
+  nav, header, footer, button, .print-hide {
+    display: none !important;
   }
 
-  /* 4. Selectively reveal ONLY the document container and its children */
-  .print-only-doc, .print-only-doc * {
-    visibility: visible;
-  }
-
-  /* 5. Position the document at the absolute top-left (0,0) 
-     This forces it to cover any potential header space the browser reserves */
-  .print-only-doc {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    /* This padding is your ACTUAL document margin (e.g., 1 inch) */
+  /* 4. Ensure the Document Container is Visible */
+  .print-only-container {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    /* This padding provides the safe area for your text, 
+       replacing the browser margin we removed */
     padding: 20mm !important; 
-    box-sizing: border-box;
   }
 
-  /* 6. Force high-contrast black/white to prevent "Lab" color errors */
+  /* 5. CRITICAL: Force standard colors to fix PDF crash */
   * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
     color: black !important;
     border-color: black !important;
     background: transparent !important;
     box-shadow: none !important;
     text-shadow: none !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  
-  /* 7. Ensure web-only elements are definitely gone */
-  .print-hide, nav, header, footer, button {
-    display: none !important;
   }
 }
