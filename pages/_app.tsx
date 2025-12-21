@@ -13,7 +13,7 @@ export default function App({ Component, pageProps }: AppProps) {
         <title>Dispute It</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       </Head>
-
+      <div suppressHydrationWarning>
       {/* THE FIX: Load Google Maps securely outside of Head */}
       <Script
         src={`https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`}
@@ -21,6 +21,7 @@ export default function App({ Component, pageProps }: AppProps) {
       />
 
       <Component {...pageProps} />
+      </div>
     </>
   );
 }
