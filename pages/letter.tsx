@@ -87,7 +87,7 @@ export default function LetterPage() {
     setIsAnalyzingText(false);
   };
 
-  // --- NEW: SANITIZED PDF GENERATION ---
+  // --- FIX: TUNED PDF GENERATION ---
   const handleDownloadPacket = async () => {
     setIsGeneratingPdf(true);
     try {
@@ -100,55 +100,55 @@ export default function LetterPage() {
         return;
       }
 
-      // 1. CLONE THE ELEMENT
+      // 1. CLONE
       const clone = element.cloneNode(true) as HTMLElement;
       
-      // 2. SANITIZE COLORS (The Fix for 'lab' error)
-      // We manually force every element to use HEX codes, overriding Tailwind 'lab' defaults
+      // 2. SANITIZE & RESIZE (The Fixes)
+      
+      // A. Width Fix: 700px fits perfectly inside A4 margins (800px was too wide)
+      clone.style.width = '700px'; 
+      clone.style.maxWidth = '700px';
+      
+      // B. Blank Page Fix: Remove any top margins/min-heights that push content down
+      clone.style.minHeight = '0';
+      clone.style.margin = '0';
+      clone.style.padding = '20px'; // Internal padding for the document look
+      clone.style.display = 'block';
+      clone.style.backgroundColor = '#ffffff';
+
+      // C. Color Fix: Force standard colors
       const allElements = clone.querySelectorAll('*');
       allElements.forEach((el: any) => {
-        // Force Text to Black
-        el.style.color = '#000000';
-        
-        // Force Borders to simple Gray (if they have borders)
-        // We detect this loosely by checking class names or just enforcing it
+        el.style.color = '#000000'; // Black text
         if (el.className && typeof el.className === 'string' && el.className.includes('border')) {
-             el.style.borderColor = '#9ca3af'; // Hex for gray-400
+             el.style.borderColor = '#9ca3af'; // Gray border
              el.style.borderStyle = 'solid';
         }
-        
-        // Force Backgrounds (Safety check to prevent transparent-to-black issues)
-        // Only skip images
-        if (el.tagName !== 'IMG' && el.tagName !== 'svg' && el.tagName !== 'path') {
+        if (el.tagName !== 'IMG' && el.tagName !== 'svg') {
              el.style.backgroundColor = 'transparent';
         }
       });
 
-      // 3. PREPARE CONTAINER
+      // 3. WRAPPER (Off-screen)
       const wrapper = document.createElement('div');
       wrapper.style.position = 'absolute';
       wrapper.style.top = '-9999px';
       wrapper.style.left = '0';
-      // Force white background on the page itself
       wrapper.style.backgroundColor = '#ffffff'; 
       wrapper.appendChild(clone);
       document.body.appendChild(wrapper);
 
-      // Force clone display
-      clone.style.display = 'block';
-      clone.style.width = '800px';
-      clone.style.backgroundColor = '#ffffff';
-
-      // 4. CONFIGURE PDF
+      // 4. CONFIG
       const opt = {
-        margin:       [15, 15, 15, 15],
+        margin:       [10, 10, 10, 10], // Tighter margins to fit more content
         filename:     `Protest_Packet_${accountNumber || 'Draft'}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { 
           scale: 2, 
           useCORS: true, 
           logging: false,
-          backgroundColor: '#ffffff' // Explicitly set white bg
+          backgroundColor: '#ffffff',
+          windowWidth: 750 // Matches our new width constraint
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
@@ -378,9 +378,10 @@ export default function LetterPage() {
     </div>
 
     {/* HIDDEN PRINT DOCUMENT (SOURCE FOR PDF) */}
-    <div id="print-container" className="hidden bg-white text-black p-10 max-w-[800px]">
+    {/* Removed 'hidden' class here for the clone logic to handle, but using inline style to hide from user */}
+    <div id="print-container" style={{ display: 'none' }} className="bg-white text-black p-0 max-w-[700px]">
         {/* PAGE 1: LETTER */}
-        <div className="min-h-[1000px] relative">
+        <div className="min-h-[900px] relative p-10">
             <div className="text-right mb-12 text-sm">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
             <div className="mb-10 whitespace-pre-wrap leading-6">{recipientInfo}</div>
             <div className="mb-8 font-bold border-l-4 border-black pl-4 py-2">
@@ -403,7 +404,7 @@ export default function LetterPage() {
         <div className="html2pdf__page-break"></div>
 
         {/* PAGE 2+: EVIDENCE */}
-        <div>
+        <div className="p-10">
             <h1 className="text-2xl font-bold border-b-2 border-black pb-2 mb-8 uppercase tracking-widest">Evidence Appendix</h1>
             <div className="space-y-10">
                 {evidence.map((item, index) => (
