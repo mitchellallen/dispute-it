@@ -28,6 +28,7 @@ export default function LetterPage() {
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [isAnalyzingText, setIsAnalyzingText] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false); // NEW: Loading state for PDF
 
   // --- Helper: Format numbers with commas as user types ---
   const formatNumberWithCommas = (val: string) => {
@@ -86,7 +87,68 @@ export default function LetterPage() {
     setIsAnalyzingText(false);
   };
 
-  const handleDownloadPacket = () => { window.print(); };
+  // --- REPLACED: PDF GENERATION FUNCTION ---
+  const handleDownloadPacket = async () => {
+    setIsGeneratingPdf(true); // Start loading spinner
+    try {
+      // 1. Load library dynamically (only on client)
+      const html2pdf = (await import('html2pdf.js')).default;
+
+      // 2. Find the hidden container
+      const element = document.getElementById('print-container');
+      if (!element) {
+        alert("Error: Could not find document to print.");
+        setIsGeneratingPdf(false);
+        return;
+      }
+
+      // 3. Clone and Prepare
+      // We clone the element so we can modify styles for the PDF without breaking the React UI
+      const clone = element.cloneNode(true) as HTMLElement;
+      
+      // Force visibility and styling on the clone
+      clone.style.display = 'block';
+      clone.style.width = '800px'; // Fixed width for A4 consistency
+      clone.style.background = 'white';
+      clone.style.color = 'black'; // Force black text
+      
+      // Add a wrapper to ensure clean margins during capture
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'absolute';
+      wrapper.style.top = '-9999px';
+      wrapper.style.left = '0';
+      wrapper.appendChild(clone);
+      document.body.appendChild(wrapper);
+
+      // 4. Configure PDF Options
+      const opt = {
+        margin:       [15, 15, 15, 15], // mm margins (Top, Left, Bottom, Right)
+        filename:     `Protest_Packet_${accountNumber || 'Draft'}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { 
+          scale: 2, // 2x scale for sharp text/images
+          useCORS: true, 
+          logging: false,
+          windowWidth: 1200 // Simulate a desktop browser width
+        },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] } // Smart page breaking
+      };
+
+      // 5. Generate
+      await html2pdf().set(opt).from(clone).save();
+
+      // 6. Cleanup
+      document.body.removeChild(wrapper);
+
+    } catch (err) {
+      console.error("PDF Gen Error:", err);
+      alert("Could not generate PDF. Please try again.");
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const saveSignature = () => { if (sigPad.current) setSignatureImage(sigPad.current.getTrimmedCanvas().toDataURL('image/png')); };
   const clearSignature = () => { if (sigPad.current) { sigPad.current.clear(); setSignatureImage(null); } };
 
@@ -117,44 +179,6 @@ export default function LetterPage() {
 
   return (
     <>
-    {/* REINFORCED PRINT STYLES TO KILL HEADERS/FOOTERS AND FIX COLOR ERRORS */}
-<style dangerouslySetInnerHTML={{ __html: `
-  @page {
-    size: auto;
-    /* This margin must be 0 to force the URL and Date to disappear */
-    margin: 0mm !important; 
-  }
-  @media print {
-    html, body {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        /* Standardizing colors to prevent "lab" parsing errors */
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-    }
-    body {
-        margin: 0;
-        padding: 0;
-    }
-    .print-only-doc {
-        display: block !important;
-        /* We manually add the 20mm margin back here so the text doesn't hit the edge */
-        padding: 20mm !important; 
-        min-height: 297mm;
-        box-sizing: border-box;
-    }
-    /* Ensure no web UI elements leak into the print */
-    .print-hide, .print\\:hidden { display: none !important; }
-    
-    /* Shield against modern color functions that crash iOS PDF renders */
-    * { 
-      color: #000000 !important; 
-      border-color: #000000 !important; 
-      background: transparent !important; 
-    }
-  }
-`}} />
-
     {/* APP VIEW (SCREEN) */}
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 print:hidden">
       <div className="bg-white border-b border-slate-200 sticky top-0 z-20 px-6 py-4 flex justify-between items-center shadow-sm">
@@ -182,8 +206,13 @@ export default function LetterPage() {
             </button>
           </div>
           
-          <button onClick={handleDownloadPacket} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-blue-700 transition shadow-md">
-            <Download size={18} /> Download Packet
+          <button 
+            onClick={handleDownloadPacket} 
+            disabled={isGeneratingPdf}
+            className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-blue-700 transition shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {isGeneratingPdf ? <Loader2 size={18} className="animate-spin"/> : <Download size={18} />}
+            {isGeneratingPdf ? "Generating PDF..." : "Download Packet"}
           </button>
         </div>
       </div>
@@ -330,40 +359,50 @@ export default function LetterPage() {
       </div>
     </div>
 
-    {/* PRINT VIEW (PHANTOM DOC) */}
-    <div className="hidden print:block bg-white print-only-container">
-        <div className="min-h-[290mm] relative">
-            <div className="text-right mb-12 text-sm text-black">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-            <div className="mb-10 whitespace-pre-wrap leading-6 text-black">{recipientInfo}</div>
+    {/* HIDDEN PRINT DOCUMENT (SOURCE FOR PDF) */}
+    {/* 1. 'hidden' ensures it's not seen on screen.
+       2. id="print-container" is what html2pdf grabs.
+       3. We use basic Tailwind here, but html2pdf uses the computed styles.
+    */}
+    <div id="print-container" className="hidden bg-white text-black p-10 max-w-[800px]">
+        {/* PAGE 1: LETTER */}
+        <div className="min-h-[1000px] relative">
+            <div className="text-right mb-12 text-sm">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            <div className="mb-10 whitespace-pre-wrap leading-6">{recipientInfo}</div>
             <div className="mb-8 font-bold border-l-4 border-black pl-4 py-2">
                 <p>Property Tax Protest</p>
                 <p>Account Number: {accountNumber || "____________________"}</p>
                 <p>Property Address: {property?.address}</p>
             </div>
-            <p className="mb-6 text-black">To Whom It May Concern,</p>
-            <div className="whitespace-pre-wrap mb-12 text-justify leading-7 text-black">{letterBody}</div>
+            <p className="mb-6">To Whom It May Concern,</p>
+            <div className="whitespace-pre-wrap mb-12 text-justify leading-7">{letterBody}</div>
             <div className="mt-16">
-                <p className="mb-4 text-black">Sincerely,</p>
+                <p className="mb-4">Sincerely,</p>
                 {signatureImage && <img src={signatureImage} className="h-16 w-auto mb-2" />}
                 <div className="border-b border-black w-64 mb-2"></div>
-                <p className="font-bold text-lg text-black">{ownerName || "[Owner Name]"}</p>
-                <p className="text-sm text-black">Property Owner</p>
+                <p className="font-bold text-lg">{ownerName || "[Owner Name]"}</p>
+                <p className="text-sm">Property Owner</p>
             </div>
         </div>
-        <div className="break-before-page"></div>
+
+        {/* PAGE BREAK (Force new page for evidence) */}
+        <div className="html2pdf__page-break"></div>
+
+        {/* PAGE 2+: EVIDENCE */}
         <div>
-            <h1 className="text-2xl font-bold border-b-2 border-black pb-2 mb-8 uppercase tracking-widest text-black">Evidence Appendix</h1>
+            <h1 className="text-2xl font-bold border-b-2 border-black pb-2 mb-8 uppercase tracking-widest">Evidence Appendix</h1>
             <div className="space-y-10">
                 {evidence.map((item, index) => (
-                    <div key={item.id} className="break-inside-avoid mb-10 border-b border-gray-400 pb-10 last:border-0">
+                    <div key={item.id} className="mb-10 border-b border-gray-400 pb-10 last:border-0 avoid-break">
                         <div className="flex items-start gap-2 mb-4">
                             <span className="bg-black text-white font-bold px-2 py-1 text-sm rounded">Ex. {index + 1}</span>
-                            <h3 className="text-xl font-bold text-black">{item.title}</h3>
+                            <h3 className="text-xl font-bold">{item.title}</h3>
                         </div>
-                        <p className="mb-6 text-black italic border-l-2 border-gray-400 pl-4">{item.description}</p>
+                        <p className="mb-6 italic border-l-2 border-gray-400 pl-4">{item.description}</p>
                         <div className="grid grid-cols-2 gap-4">
                             {item.attachments && item.attachments.map((att, i) => (
                                 <div key={i} className="border border-gray-400 p-2">
+                                    {/* Ensure images are loaded before print - usually handled by React rendering */}
                                     <img src={att.url} className="w-full h-auto object-contain max-h-[300px]" />
                                 </div>
                             ))}
