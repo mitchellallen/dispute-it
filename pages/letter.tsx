@@ -117,16 +117,43 @@ export default function LetterPage() {
 
   return (
     <>
-    <style dangerouslySetInnerHTML={{ __html: `
-      @page { size: auto; margin: 0mm; }
-      @media print {
-        html, body { background-color: #fff; color: #000; }
-        body { margin: 0; padding: 0; }
-        .print-only-container { padding: 25mm 20mm; display: block !important; }
-        * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; color: #000 !important; border-color: #000 !important; background: transparent !important; box-shadow: none !important; }
-        .print-hide, .print:hidden { display: none !important; }
-      }
-    `}} />
+    {/* REINFORCED PRINT STYLES TO KILL HEADERS/FOOTERS AND FIX COLOR ERRORS */}
+<style dangerouslySetInnerHTML={{ __html: `
+  @page {
+    size: auto;
+    /* This margin must be 0 to force the URL and Date to disappear */
+    margin: 0mm !important; 
+  }
+  @media print {
+    html, body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        /* Standardizing colors to prevent "lab" parsing errors */
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    body {
+        margin: 0;
+        padding: 0;
+    }
+    .print-only-doc {
+        display: block !important;
+        /* We manually add the 20mm margin back here so the text doesn't hit the edge */
+        padding: 20mm !important; 
+        min-height: 297mm;
+        box-sizing: border-box;
+    }
+    /* Ensure no web UI elements leak into the print */
+    .print-hide, .print\\:hidden { display: none !important; }
+    
+    /* Shield against modern color functions that crash iOS PDF renders */
+    * { 
+      color: #000000 !important; 
+      border-color: #000000 !important; 
+      background: transparent !important; 
+    }
+  }
+`}} />
 
     {/* APP VIEW (SCREEN) */}
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 print:hidden">
