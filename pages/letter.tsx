@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { Download, AlertTriangle, ArrowLeft, Wand2, FileText, Loader2, Sparkles, RefreshCw, PenTool, RotateCcw } from 'lucide-react';
+import { Download, AlertTriangle, ArrowLeft, Wand2, FileText, Loader2, RefreshCw, PenTool, RotateCcw } from 'lucide-react';
 import { getAIStrategyReview, getCaseScore, analyzeDocument, getLetterSuggestions } from '../lib/geminiService';
 import EvidenceCard, { EvidenceItem } from '../components/EvidenceCard';
 import SignatureCanvas from 'react-signature-canvas';
@@ -28,9 +28,9 @@ export default function LetterPage() {
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [isAnalyzingText, setIsAnalyzingText] = useState(false);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false); // NEW: Loading state for PDF
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
-  // --- Helper: Format numbers with commas as user types ---
+  // --- Helper: Format numbers with commas ---
   const formatNumberWithCommas = (val: string) => {
     const numericValue = val.replace(/[^0-9]/g, '');
     if (!numericValue) return '';
@@ -87,63 +87,82 @@ export default function LetterPage() {
     setIsAnalyzingText(false);
   };
 
-  // --- REPLACED: PDF GENERATION FUNCTION ---
+  // --- NEW: SANITIZED PDF GENERATION ---
   const handleDownloadPacket = async () => {
-    setIsGeneratingPdf(true); // Start loading spinner
+    setIsGeneratingPdf(true);
     try {
-      // 1. Load library dynamically (only on client)
       const html2pdf = (await import('html2pdf.js')).default;
-
-      // 2. Find the hidden container
       const element = document.getElementById('print-container');
+      
       if (!element) {
         alert("Error: Could not find document to print.");
         setIsGeneratingPdf(false);
         return;
       }
 
-      // 3. Clone and Prepare
-      // We clone the element so we can modify styles for the PDF without breaking the React UI
+      // 1. CLONE THE ELEMENT
       const clone = element.cloneNode(true) as HTMLElement;
       
-      // Force visibility and styling on the clone
-      clone.style.display = 'block';
-      clone.style.width = '800px'; // Fixed width for A4 consistency
-      clone.style.background = 'white';
-      clone.style.color = 'black'; // Force black text
-      
-      // Add a wrapper to ensure clean margins during capture
+      // 2. SANITIZE COLORS (The Fix for 'lab' error)
+      // We manually force every element to use HEX codes, overriding Tailwind 'lab' defaults
+      const allElements = clone.querySelectorAll('*');
+      allElements.forEach((el: any) => {
+        // Force Text to Black
+        el.style.color = '#000000';
+        
+        // Force Borders to simple Gray (if they have borders)
+        // We detect this loosely by checking class names or just enforcing it
+        if (el.className && typeof el.className === 'string' && el.className.includes('border')) {
+             el.style.borderColor = '#9ca3af'; // Hex for gray-400
+             el.style.borderStyle = 'solid';
+        }
+        
+        // Force Backgrounds (Safety check to prevent transparent-to-black issues)
+        // Only skip images
+        if (el.tagName !== 'IMG' && el.tagName !== 'svg' && el.tagName !== 'path') {
+             el.style.backgroundColor = 'transparent';
+        }
+      });
+
+      // 3. PREPARE CONTAINER
       const wrapper = document.createElement('div');
       wrapper.style.position = 'absolute';
       wrapper.style.top = '-9999px';
       wrapper.style.left = '0';
+      // Force white background on the page itself
+      wrapper.style.backgroundColor = '#ffffff'; 
       wrapper.appendChild(clone);
       document.body.appendChild(wrapper);
 
-      // 4. Configure PDF Options
+      // Force clone display
+      clone.style.display = 'block';
+      clone.style.width = '800px';
+      clone.style.backgroundColor = '#ffffff';
+
+      // 4. CONFIGURE PDF
       const opt = {
-        margin:       [15, 15, 15, 15], // mm margins (Top, Left, Bottom, Right)
+        margin:       [15, 15, 15, 15],
         filename:     `Protest_Packet_${accountNumber || 'Draft'}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { 
-          scale: 2, // 2x scale for sharp text/images
+          scale: 2, 
           useCORS: true, 
           logging: false,
-          windowWidth: 1200 // Simulate a desktop browser width
+          backgroundColor: '#ffffff' // Explicitly set white bg
         },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] } // Smart page breaking
+        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
-      // 5. Generate
+      // 5. SAVE
       await html2pdf().set(opt).from(clone).save();
-
-      // 6. Cleanup
+      
+      // 6. CLEANUP
       document.body.removeChild(wrapper);
 
     } catch (err) {
       console.error("PDF Gen Error:", err);
-      alert("Could not generate PDF. Please try again.");
+      alert("Error generating PDF. Please try again.");
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -187,7 +206,6 @@ export default function LetterPage() {
         </button>
         
         <div className="flex items-center gap-6">
-          {/* RE-SCAN STATUS INDICATOR */}
           <div className="text-right hidden md:block border-r border-slate-200 pr-6">
             <div className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">AI Analysis</div>
             <button 
@@ -360,10 +378,6 @@ export default function LetterPage() {
     </div>
 
     {/* HIDDEN PRINT DOCUMENT (SOURCE FOR PDF) */}
-    {/* 1. 'hidden' ensures it's not seen on screen.
-       2. id="print-container" is what html2pdf grabs.
-       3. We use basic Tailwind here, but html2pdf uses the computed styles.
-    */}
     <div id="print-container" className="hidden bg-white text-black p-10 max-w-[800px]">
         {/* PAGE 1: LETTER */}
         <div className="min-h-[1000px] relative">
@@ -402,7 +416,6 @@ export default function LetterPage() {
                         <div className="grid grid-cols-2 gap-4">
                             {item.attachments && item.attachments.map((att, i) => (
                                 <div key={i} className="border border-gray-400 p-2">
-                                    {/* Ensure images are loaded before print - usually handled by React rendering */}
                                     <img src={att.url} className="w-full h-auto object-contain max-h-[300px]" />
                                 </div>
                             ))}
